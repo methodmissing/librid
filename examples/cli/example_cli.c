@@ -1,6 +1,6 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdint.h>
 
 #include "rid/rid.h"
 
@@ -44,6 +44,7 @@ static int
 decode_and_print(const char *hex_string)
 {
     uint8_t buffer[256];
+    memset(buffer, 0, sizeof(buffer));
     int length = hex_to_bytes(hex_string, buffer, sizeof(buffer));
     if (length < 0) {
         fprintf(stderr, "Error: Invalid hex string\n");
@@ -62,9 +63,39 @@ decode_and_print(const char *hex_string)
         }
         counter = buffer[1];
         message = buffer + 2;
-    } else if (length != RID_MESSAGE_LENGTH) {
-        fprintf(stderr, "Error: Expected %d or %d bytes, got %d\n",
-                RID_MESSAGE_LENGTH, RID_BTMON_LENGTH, length);
+        length -= 2;
+    }
+
+    /* Determine expected length based on message type */
+    int expected_length = RID_MESSAGE_LENGTH;
+    if (rid_message_get_type(message) == RID_MESSAGE_TYPE_MESSAGE_PACK) {
+        if (length < 3) {
+            fprintf(stderr, "Error: Message pack too short\n");
+            return 1;
+        }
+        /* header (1) + size (1) + count (1) + messages (n * 25) */
+        int count =
+            rid_message_pack_get_message_count((rid_message_pack_t *)message);
+        expected_length = 3 + count * RID_MESSAGE_SIZE;
+
+        /* Verify alignment */
+        if ((length - 3) % RID_MESSAGE_SIZE != 0) {
+            fprintf(stderr,
+                "Error: Invalid message pack length %d (alignment error)\n",
+                length);
+            return 1;
+        }
+    }
+
+    if (length != expected_length) {
+        if (rid_message_get_type(message) == RID_MESSAGE_TYPE_MESSAGE_PACK) {
+            fprintf(stderr, "Error: Message pack length %d does not match count\n",
+                length);
+        } else {
+            fprintf(stderr, "Error: Expected %d or %d bytes, got %d\n",
+                RID_MESSAGE_LENGTH, RID_BTMON_LENGTH,
+                length + (counter >= 0 ? 2 : 0));
+        }
         return 1;
     }
 

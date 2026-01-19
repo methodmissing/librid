@@ -12,6 +12,7 @@ $ ./rid < file.hex
 
 - **25 bytes**: Remote ID message
 - **27 bytes**: Application Code + Counter + Remote ID message
+- **3 + N*25 bytes**: Remote ID Message Pack
 
 ## Example
 
